@@ -23669,6 +23669,8 @@ interactive_mode() {
                 *"1080p CACHE.txt") cache_name="1080p cache" ;;
                 *"1080p SOFTCORE CACHE.txt") cache_name="1080p Softcore cache" ;;
                 *"4K SOFTCORE CACHE.txt") cache_name="4K Softcore cache" ;;
+                *"CARTOONS CACHE.txt") cache_name="Cartoons cache" ;;
+                *"ANIME CACHE.txt") cache_name="Anime cache" ;;
                 *) cache_name="cache" ;;
             esac
             
