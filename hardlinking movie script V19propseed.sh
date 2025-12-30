@@ -3718,7 +3718,9 @@ get_mediainfo_from_file() {
         local audio_codec=$(echo "$audio_output" | awk -F'|' '{print $1}')
         local audio_profile=$(echo "$audio_output" | awk -F'|' '{print $2}')
         local channels=$(echo "$audio_output" | awk -F'|' '{print $3}' | grep -oE '^[0-9]+' || echo "")
-        local audio_language=$(echo "$audio_output" | awk -F'|' '{print $4}')
+        
+        # Extract ALL audio languages from all tracks
+        local all_languages=$(mediainfo --Output='Audio;%Language%\n' "$file_path" 2>/dev/null | grep -v '^$')
         
         # Process video codec
         local video_codec_lower=$(echo "$video_codec" | tr '[:upper:]' '[:lower:]')
@@ -3800,21 +3802,147 @@ get_mediainfo_from_file() {
         fi
         
         # Store audio language (normalize to 2-letter uppercase codes)
-        if [[ -n "$audio_language" ]]; then
-            local audio_lang_lower=$(echo "$audio_language" | tr '[:upper:]' '[:lower:]')
-            case "$audio_lang_lower" in
-                en|eng|english) MEDIAINFO_AUDIO_LANGUAGE="EN" ;;
-                ja|jp|jpn|japanese) MEDIAINFO_AUDIO_LANGUAGE="JA" ;;
-                de|ger|german) MEDIAINFO_AUDIO_LANGUAGE="DE" ;;
-                fr|fre|french) MEDIAINFO_AUDIO_LANGUAGE="FR" ;;
-                es|spa|spanish) MEDIAINFO_AUDIO_LANGUAGE="ES" ;;
-                it|ita|italian) MEDIAINFO_AUDIO_LANGUAGE="IT" ;;
-                pt|por|portuguese) MEDIAINFO_AUDIO_LANGUAGE="PT" ;;
-                ru|rus|russian) MEDIAINFO_AUDIO_LANGUAGE="RU" ;;
-                ko|kor|korean) MEDIAINFO_AUDIO_LANGUAGE="KO" ;;
-                zh|chi|chinese) MEDIAINFO_AUDIO_LANGUAGE="ZH" ;;
-                *) MEDIAINFO_AUDIO_LANGUAGE="$(echo ${audio_language:0:2} | tr '[:lower:]' '[:upper:]')" ;;
-            esac
+        # Handle multiple audio tracks - format as "ES, EN" with comma and space
+        if [[ -n "$all_languages" ]]; then
+            local normalized_langs=""
+            while IFS= read -r audio_language; do
+                [[ -z "$audio_language" ]] && continue
+                local audio_lang_lower=$(echo "$audio_language" | tr '[:upper:]' '[:lower:]')
+                local normalized_lang=""
+                case "$audio_lang_lower" in
+                    # Major world languages (by total speakers)
+                    en|eng|english|en-us|en-gb) normalized_lang="EN" ;;
+                    es|spa|spanish|español|es-es|es-mx|es-la|castellano|castilian) normalized_lang="ES" ;;
+                    zh|chi|chinese|mandarin|zho|zh-cn|zh-tw|zh-hans|zh-hant|cmn|yue|cantonese) normalized_lang="ZH" ;;
+                    hi|hin|hindi) normalized_lang="HI" ;;
+                    ar|ara|arabic|ar-sa) normalized_lang="AR" ;;
+                    pt|por|portuguese|português|pt-br|pt-pt|brazilian) normalized_lang="PT" ;;
+                    bn|ben|bengali|bangla) normalized_lang="BN" ;;
+                    ru|rus|russian) normalized_lang="RU" ;;
+                    ja|jp|jpn|japanese) normalized_lang="JA" ;;
+                    de|ger|german|deu|de-de|de-at|de-ch) normalized_lang="DE" ;;
+                    fr|fre|french|français|fra|fr-fr|fr-ca) normalized_lang="FR" ;;
+                    
+                    # European languages (alphabetical by code)
+                    sq|alb|albanian|sqi) normalized_lang="SQ" ;;
+                    hy|arm|armenian|hye) normalized_lang="HY" ;;
+                    eu|baq|basque|eus) normalized_lang="EU" ;;
+                    be|bel|belarusian) normalized_lang="BE" ;;
+                    bs|bos|bosnian) normalized_lang="BS" ;;
+                    bg|bul|bulgarian) normalized_lang="BG" ;;
+                    ca|cat|catalan) normalized_lang="CA" ;;
+                    hr|hrv|croatian) normalized_lang="HR" ;;
+                    cs|cze|czech|ces) normalized_lang="CS" ;;
+                    da|dan|danish) normalized_lang="DA" ;;
+                    nl|dut|dutch|nld|flemish) normalized_lang="NL" ;;
+                    et|est|estonian) normalized_lang="ET" ;;
+                    fi|fin|finnish) normalized_lang="FI" ;;
+                    gl|glg|galician) normalized_lang="GL" ;;
+                    ka|geo|georgian|kat) normalized_lang="KA" ;;
+                    el|gre|greek|ell) normalized_lang="EL" ;;
+                    hu|hun|hungarian) normalized_lang="HU" ;;
+                    is|ice|icelandic|isl) normalized_lang="IS" ;;
+                    ga|gle|irish) normalized_lang="GA" ;;
+                    it|ita|italian) normalized_lang="IT" ;;
+                    lv|lav|latvian) normalized_lang="LV" ;;
+                    lt|lit|lithuanian) normalized_lang="LT" ;;
+                    lb|ltz|luxembourgish) normalized_lang="LB" ;;
+                    mk|mac|macedonian|mkd) normalized_lang="MK" ;;
+                    mt|mlt|maltese) normalized_lang="MT" ;;
+                    no|nor|norwegian|nb|nob|nn|nno) normalized_lang="NO" ;;
+                    pl|pol|polish) normalized_lang="PL" ;;
+                    ro|rum|romanian|ron) normalized_lang="RO" ;;
+                    sr|srp|serbian) normalized_lang="SR" ;;
+                    sk|slo|slovak|slk) normalized_lang="SK" ;;
+                    sl|slv|slovenian) normalized_lang="SL" ;;
+                    sv|swe|swedish) normalized_lang="SV" ;;
+                    uk|ukr|ukrainian) normalized_lang="UK" ;;
+                    cy|wel|welsh|cym) normalized_lang="CY" ;;
+                    
+                    # Asian languages (East, Southeast, South)
+                    my|bur|burmese|mya) normalized_lang="MY" ;;
+                    km|khm|cambodian|khmer) normalized_lang="KM" ;;
+                    id|ind|indonesian) normalized_lang="ID" ;;
+                    ko|kor|korean) normalized_lang="KO" ;;
+                    lo|lao|laotian) normalized_lang="LO" ;;
+                    ms|may|malay|msa) normalized_lang="MS" ;;
+                    ne|nep|nepali) normalized_lang="NE" ;;
+                    tl|fil|tag|tagalog|filipino) normalized_lang="TL" ;;
+                    th|tha|thai) normalized_lang="TH" ;;
+                    vi|vie|vietnamese) normalized_lang="VI" ;;
+                    
+                    # Indian languages (most common)
+                    as|asm|assamese) normalized_lang="AS" ;;
+                    gu|guj|gujarati) normalized_lang="GU" ;;
+                    kn|kan|kannada) normalized_lang="KN" ;;
+                    ml|mal|malayalam) normalized_lang="ML" ;;
+                    mr|mar|marathi) normalized_lang="MR" ;;
+                    or|ori|odia|oriya) normalized_lang="OR" ;;
+                    pa|pan|punjabi|panjabi) normalized_lang="PA" ;;
+                    sa|san|sanskrit) normalized_lang="SA" ;;
+                    sd|snd|sindhi) normalized_lang="SD" ;;
+                    si|sin|sinhala|sinhalese) normalized_lang="SI" ;;
+                    ta|tam|tamil) normalized_lang="TA" ;;
+                    te|tel|telugu) normalized_lang="TE" ;;
+                    ur|urd|urdu) normalized_lang="UR" ;;
+                    
+                    # Middle Eastern languages
+                    az|aze|azerbaijani) normalized_lang="AZ" ;;
+                    fa|per|persian|farsi|fas) normalized_lang="FA" ;;
+                    he|heb|hebrew) normalized_lang="HE" ;;
+                    ku|kur|kurdish) normalized_lang="KU" ;;
+                    ps|pus|pashto|pushto) normalized_lang="PS" ;;
+                    tr|tur|turkish) normalized_lang="TR" ;;
+                    
+                    # African languages
+                    af|afr|afrikaans) normalized_lang="AF" ;;
+                    am|amh|amharic) normalized_lang="AM" ;;
+                    ha|hau|hausa) normalized_lang="HA" ;;
+                    ig|ibo|igbo) normalized_lang="IG" ;;
+                    rw|kin|kinyarwanda) normalized_lang="RW" ;;
+                    mg|mlg|malagasy) normalized_lang="MG" ;;
+                    so|som|somali) normalized_lang="SO" ;;
+                    sw|swa|swahili) normalized_lang="SW" ;;
+                    xh|xho|xhosa) normalized_lang="XH" ;;
+                    yo|yor|yoruba) normalized_lang="YO" ;;
+                    zu|zul|zulu) normalized_lang="ZU" ;;
+                    
+                    # Central Asian & Other
+                    kk|kaz|kazakh) normalized_lang="KK" ;;
+                    ky|kir|kyrgyz) normalized_lang="KY" ;;
+                    mn|mon|mongolian) normalized_lang="MN" ;;
+                    tg|tgk|tajik) normalized_lang="TG" ;;
+                    tk|tuk|turkmen) normalized_lang="TK" ;;
+                    ug|uig|uyghur|uighur) normalized_lang="UG" ;;
+                    uz|uzb|uzbek) normalized_lang="UZ" ;;
+                    
+                    # Latin American & Caribbean
+                    qu|que|quechua) normalized_lang="QU" ;;
+                    gn|grn|guarani) normalized_lang="GN" ;;
+                    ay|aym|aymara) normalized_lang="AY" ;;
+                    ht|hat|haitian) normalized_lang="HT" ;;
+                    
+                    # Pacific languages
+                    mi|mao|maori|mri) normalized_lang="MI" ;;
+                    sm|smo|samoan) normalized_lang="SM" ;;
+                    to|ton|tongan) normalized_lang="TO" ;;
+                    fj|fij|fijian) normalized_lang="FJ" ;;
+                    
+                    # Constructed/Special languages
+                    eo|epo|esperanto) normalized_lang="EO" ;;
+                    la|lat|latin) normalized_lang="LA" ;;
+                    
+                    # Fallback: extract first 2 characters and uppercase
+                    *) normalized_lang="$(echo ${audio_language:0:2} | tr '[:lower:]' '[:upper:]')" ;;
+                esac
+                # Add to list with comma separator
+                if [[ -z "$normalized_langs" ]]; then
+                    normalized_langs="$normalized_lang"
+                else
+                    normalized_langs="${normalized_langs}, ${normalized_lang}"
+                fi
+            done <<< "$all_languages"
+            MEDIAINFO_AUDIO_LANGUAGE="$normalized_langs"
         fi
         
         should_debug high && echo "[DEBUG] [mediainfo] results - VIDEO='$MEDIAINFO_VIDEO_CODEC' AUDIO='$MEDIAINFO_AUDIO_CODEC' CHANNELS='$MEDIAINFO_AUDIO_CHANNELS' RESOLUTION='$MEDIAINFO_RESOLUTION' 3D='$MEDIAINFO_3D' BIT_DEPTH='$MEDIAINFO_BIT_DEPTH' LANG='$MEDIAINFO_AUDIO_LANGUAGE'" >&2
@@ -14091,8 +14219,8 @@ process_tv_episode() {
     esac
     
     # Add quality and metadata tags (TrashGuides format)
-    # Standard/Daily: [Quality][HDR][Audio][Video]-Group
-    # Anime: [Quality][HDR][BitDepth][Video][Audio][Language]-Group
+    # Standard/Daily: [Custom Formats][Quality][Audio Channels][HDR][Video]-Group
+    # Anime: [Custom Formats][Quality][HDR][BitDepth][Video][Audio Channels][Language]-Group
     
     # Custom formats (if available)
     [[ -n "$PARSED_CUSTOM_FORMAT" ]] && episode_filename="${episode_filename} [${PARSED_CUSTOM_FORMAT}]"
@@ -14102,11 +14230,13 @@ process_tv_episode() {
         episode_filename="${episode_filename} [${PARSED_FULL_QUALITY}]"
     fi
     
-    # HDR/Dynamic Range (comes after quality for ALL formats)
-    [[ -n "$PARSED_HDR" ]] && episode_filename="${episode_filename} [${PARSED_HDR}]"
-    
-    # Bit depth (anime only, after HDR, in separate bracket)
     if [[ "$TV_NAMING_EPISODE" == "2" ]]; then
+        # ANIME FORMAT: [Quality][HDR][BitDepth][Video][Audio][Language]
+        
+        # HDR first for anime
+        [[ -n "$PARSED_HDR" ]] && episode_filename="${episode_filename} [${PARSED_HDR}]"
+        
+        # Bit depth (separate bracket)
         local bit_depth="$PARSED_BIT_DEPTH"
         if [[ -z "$bit_depth" ]]; then
             if [[ "$(basename "$source_file")" =~ 10bit|10-bit ]]; then
@@ -14116,21 +14246,35 @@ process_tv_episode() {
             fi
         fi
         [[ -n "$bit_depth" ]] && episode_filename="${episode_filename} [${bit_depth}]"
-    fi
-    
-    # Video codec (after HDR for standard/daily, after bit depth for anime)
-    [[ -n "$PARSED_VIDEO_CODEC" ]] && episode_filename="${episode_filename} [${PARSED_VIDEO_CODEC}]"
-    
-    # Audio codec and channels (after video for ALL formats)
-    if [[ -n "$PARSED_AUDIO_CODEC" && -n "$PARSED_AUDIO_CHANNELS" ]]; then
-        episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC} ${PARSED_AUDIO_CHANNELS}]"
-    elif [[ -n "$PARSED_AUDIO_CODEC" ]]; then
-        episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC}]"
-    fi
-    
-    # Audio language (anime only, after audio codec)
-    if [[ "$TV_NAMING_EPISODE" == "2" && -n "$PARSED_AUDIO_LANGUAGE" ]]; then
-        episode_filename="${episode_filename} [${PARSED_AUDIO_LANGUAGE}]"
+        
+        # Video codec (separate bracket)
+        [[ -n "$PARSED_VIDEO_CODEC" ]] && episode_filename="${episode_filename} [${PARSED_VIDEO_CODEC}]"
+        
+        # Audio codec and channels
+        if [[ -n "$PARSED_AUDIO_CODEC" && -n "$PARSED_AUDIO_CHANNELS" ]]; then
+            episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC} ${PARSED_AUDIO_CHANNELS}]"
+        elif [[ -n "$PARSED_AUDIO_CODEC" ]]; then
+            episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC}]"
+        fi
+        
+        # Audio language (last for anime)
+        [[ -n "$PARSED_AUDIO_LANGUAGE" ]] && episode_filename="${episode_filename} [${PARSED_AUDIO_LANGUAGE}]"
+        
+    else
+        # STANDARD/DAILY FORMAT: [Quality][Audio][HDR][Video]
+        
+        # Audio codec and channels first for standard
+        if [[ -n "$PARSED_AUDIO_CODEC" && -n "$PARSED_AUDIO_CHANNELS" ]]; then
+            episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC} ${PARSED_AUDIO_CHANNELS}]"
+        elif [[ -n "$PARSED_AUDIO_CODEC" ]]; then
+            episode_filename="${episode_filename} [${PARSED_AUDIO_CODEC}]"
+        fi
+        
+        # HDR after audio for standard
+        [[ -n "$PARSED_HDR" ]] && episode_filename="${episode_filename} [${PARSED_HDR}]"
+        
+        # Video codec last for standard
+        [[ -n "$PARSED_VIDEO_CODEC" ]] && episode_filename="${episode_filename} [${PARSED_VIDEO_CODEC}]"
     fi
     
     # Release group (with dash separator)
